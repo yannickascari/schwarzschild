@@ -79,7 +79,7 @@ impl GPUState {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Triangle Shader"),
             source: wgpu::ShaderSource::Wgsl(
-                include_str!("shaders/triangle.wgsl").into()
+                include_str!("shaders/fullscreen.wgsl").into()
             ),
         });
 
