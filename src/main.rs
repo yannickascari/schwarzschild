@@ -12,7 +12,6 @@ use winit::{
     window::{Window, WindowId},
 };
 use winit::dpi::LogicalSize;
-use winit::monitor::MonitorHandle;
 use winit::window::Fullscreen;
 
 struct App {
