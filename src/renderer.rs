@@ -3,6 +3,7 @@ use wgpu::*;
 use winit::{
     window::{Window},
 };
+use crate::camera::CameraUniform;
 
 pub struct GPUState {
     surface: Surface<'static>,
@@ -18,6 +19,7 @@ pub struct GPUState {
     compute_bind_group: BindGroup,
     render_bind_group: BindGroup,
     sampler: Sampler,
+    pub camera_buffer: Buffer,
 }
 
 impl GPUState {
@@ -91,6 +93,13 @@ impl GPUState {
             view_formats: &[],
         });
 
+        let camera_buffer = device.create_buffer(&BufferDescriptor {
+            label: Some("Camera Uniform Buffer"),
+            size: size_of::<CameraUniform>() as u64,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let compute_bgl = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("Compute BGL"),
             entries: &[BindGroupLayoutEntry {
@@ -100,6 +109,16 @@ impl GPUState {
                     access: StorageTextureAccess::WriteOnly,
                     format: TextureFormat::Rgba8Unorm,
                     view_dimension: TextureViewDimension::D2,
+                },
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: 1,
+                visibility: ShaderStages::COMPUTE,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
                 },
                 count: None,
             }]
@@ -139,10 +158,16 @@ impl GPUState {
         let compute_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("Compute Bind Group"),
             layout: &compute_bgl,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: BindingResource::TextureView(&texture_view),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&texture_view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: camera_buffer.as_entire_binding(),
+                }
+            ],
         });
 
         let render_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -221,7 +246,7 @@ impl GPUState {
             render_pipeline, compute_pipeline,
             compute_texture, compute_bgl, render_bgl,
             compute_bind_group, render_bind_group,
-            sampler
+            sampler, camera_buffer
         }
     }
 
@@ -252,10 +277,16 @@ impl GPUState {
             self.compute_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
                 label: Some("Compute Bind Group"),
                 layout: &self.compute_bgl,
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&view),
-                }],
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: self.camera_buffer.as_entire_binding(),
+                    }
+                ],
             });
 
             self.render_bind_group = self.device.create_bind_group(&BindGroupDescriptor {
@@ -332,5 +363,13 @@ impl GPUState {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         surface_texture.present();
+    }
+
+    pub fn update_camera(&self, uniform: &CameraUniform) {
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::bytes_of(uniform),
+        );
     }
 }

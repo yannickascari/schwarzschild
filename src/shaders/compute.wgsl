@@ -1,5 +1,18 @@
 @group(0) @binding(0) var output_texture: texture_storage_2d<rgba8unorm, write>;
 
+struct CameraUniform {
+    ro: vec3<f32>,
+    fov: f32,
+    forward: vec3<f32>,
+    _pad1: f32,
+    right: vec3<f32>,
+    _pad2: f32,
+    up: vec3<f32>,
+    _pad3: f32
+}
+
+@group(0) @binding(1) var<uniform> camera: CameraUniform;
+
 const RS: f32 = 1.0;
 const R_MAX: f32 = 30.0;
 const DPHI: f32 = 0.03;
@@ -82,14 +95,17 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let uv = vec2<f32>(
         f32(gid.x) / f32(dims.x),
-        1.0 - f32(gid.y) / f32(dims.y)
+        1.0 - f32(gid.y) / f32(dims.y),
     );
 
     let aspect = f32(dims.x) / f32(dims.y);
     let uv_c = (uv * 2.0 - vec2<f32>(1.0)) * vec2<f32>(aspect, 1.0);
 
-    let ro = vec3<f32>(0.0, 0.0, 15.0);
-    let rd = normalize(vec3<f32>(uv_c * 0.5, -1.0));
+    let rd = normalize(
+        uv_c.x * camera.right +
+        uv_c.y * camera.up +
+        camera.forward / camera.fov
+    );
 
-    textureStore(output_texture, vec2<i32>(gid.xy), trace_ray(ro, rd));
+    textureStore(output_texture, vec2<i32>(gid.xy), trace_ray(camera.ro, rd));
 }

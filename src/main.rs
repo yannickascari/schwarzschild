@@ -1,25 +1,36 @@
 mod renderer;
+mod camera;
 
-use renderer::GPUState;
 use std::sync::Arc;
-use winit
-::{
+use winit::event::{ElementState, MouseScrollDelta};
+use renderer::GPUState;
+use crate::camera::OrbitalCamera;
+use winit::{
     application::ApplicationHandler,
     event::{WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
+use winit::dpi::LogicalSize;
+use winit::monitor::MonitorHandle;
+use winit::window::Fullscreen;
 
 struct App {
     window: Option<Arc<Window>>,
     gpu: Option<GPUState>,
+    camera: OrbitalCamera,
+    mouse_pressed: bool,
+    last_mouse: Option<(f32, f32)>,
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop.create_window(
-                Window::default_attributes().with_title("Schwarzschild")
+                Window::default_attributes()
+                    .with_inner_size(LogicalSize::new(1280.0, 720.0))
+                    .with_fullscreen(Some(Fullscreen::Borderless(None)))
+                    .with_title("Schwarzschild")
             ).unwrap()
         );
 
@@ -37,6 +48,8 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(gpu) = &mut self.gpu {
+                    let uniform = self.camera.to_uniform();
+                    gpu.update_camera(&uniform);
                     gpu.render();
                 }
 
@@ -44,7 +57,32 @@ impl ApplicationHandler for App {
                     w.request_redraw();
                 }
             }
-
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == winit::event::MouseButton::Left {
+                    self.mouse_pressed = state == ElementState::Pressed;
+                    if !self.mouse_pressed {
+                        self.last_mouse = None;
+                    }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                let pos = (position.x as f32, position.y as f32);
+                if self.mouse_pressed {
+                    if let Some((lx, ly)) = self.last_mouse {
+                        let dx = (pos.0 - lx) * 0.01;
+                        let dy = (pos.1 - ly) * 0.01;
+                        self.camera.orbit(dx, dy);
+                    }
+                }
+                self.last_mouse = Some(pos);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scroll = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => y,
+                    MouseScrollDelta::PixelDelta(p) => p.y as f32 * 0.01,
+                };
+                self.camera.zoom(-scroll);
+            }
             _ => {}
         }
     }
@@ -55,6 +93,13 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = App { window: None, gpu: None };
+    let mut app = App {
+        window: None,
+        gpu: None,
+        camera: OrbitalCamera::new(),
+        mouse_pressed: false,
+        last_mouse: None,
+    };
+
     event_loop.run_app(&mut app).unwrap();
 }
