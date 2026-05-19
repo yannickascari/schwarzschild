@@ -1,0 +1,338 @@
+\documentclass[12pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\usepackage{hyperref}
+
+\geometry{margin=2.5cm}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{
+    \textbf{Simulation de trou noir de Schwarzschild} \\
+    \large Physique relativiste et algorithme GPU
+}
+\author{Ascari Yannick}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+
+Ce document décrit les fondements physiques et algorithmiques d'une simulation
+temps-réel d'un trou noir de Schwarzschild, implémentée en Rust avec le pipeline
+GPU wgpu/WGSL.
+
+L'objectif est de simuler le trajet de photons dans l'espace-temps courbé autour
+d'un trou noir, en intégrant numériquement les \emph{géodésiques nulles} de la
+métrique de Schwarzschild. Le résultat est rendu pixel par pixel sur le GPU, chaque
+thread calculant une géodésique indépendante.
+
+\section{La métrique de Schwarzschild}
+
+\subsection{Définition}
+
+La métrique de Schwarzschild décrit la géométrie de l'espace-temps autour d'une masse
+sphérique statique $M$. En coordonnées sphériques $(t, r, \theta, \varphi)$, l'élément de ligne s'écrit :
+
+\begin{equation}
+    ds^2 = -\left(1 - \frac{r_s}{r}\right)c^2\,dt^2
+         + \frac{dr^2}{1 - r_s/r}
+         + r^2\,d\theta^2
+         + r^2\sin^2\theta\,d\varphi^2
+\end{equation}
+
+Où $r_s = \frac{2GM}{c^2}$ est le \textbf{rayon de Schwarzschild}.
+Dans la suite, on pose $c = G = 1$ et $r_s = 1$ (unités naturelles).
+
+\subsection{Interprétation physique}
+
+Le facteur $\left(1 - r_s/r\right)$ mesure la courbure locale de l'espace-temps:
+
+\begin{itemize}
+    \item $r \gg r_s$: la métrique tend vers Minkowski (espace plat).
+    \item $r = r_s$: l'horizon des événements \--- aucun signal ne peut s'échapper.
+    \item $r < r_s$: les rôles de $t$ et $r$ s'échangent (singularité de coordonnées). 
+\end{itemize}
+
+
+\section{Géodésiques nulles}
+
+\subsection{Quantités conservées}
+
+Un photon suit une \textbf{géodésique nulle}: $ds^2 = 0$.
+La symétrie sphérique de la métrique implique, via le théorème de Noether,
+deux quantités conservées le long de la géodésique:
+
+\begin{align}
+    E &= \left(1 - \frac{r_s}{r}\right)\frac{dt}{d\lambda}
+    \quad \text{(énergie)} \\
+    L &= r^2\frac{d\varphi}{d\lambda}
+    \quad \text{(moment angulaire)}
+\end{align}
+
+Où $\lambda$ est le paramètre affine le long de la géodésique.
+
+\subsection{Paramètre d'impact}
+
+Le \textbf{paramètre d'impact} $b = L/E$ est la distance perpendiculaire
+entre le trou noir et la trajectoire asymptotique du rayon:
+
+\begin{equation}
+    b = |\vec{r}_0 \times \hat{d}|
+\end{equation}
+
+Où $\vec{r}_0$ est la position d'origine et $\hat{d}$ la direction unitaire du rayon.
+
+\subsection{Équation des orbites}
+
+En posant $u = 1/r$ et en paramètrant par $\varphi$, la géodésique nulle
+se réduit à:
+
+\begin{equation}
+    \boxed{\frac{d^2u}{d\varphi^2} + u = \frac{3}{2}\,r_s\,u^2}
+    \label{eq:geodesique}
+\end{equation}
+
+Le terme $(-u)$ correspond à la géométrie plane \--- sans relativité, il donne
+une trajectoire rectiligne. Le terme $\frac{3}{2}r_s u^2$ est la
+\textbf{correction relativiste} qui courbe la lumière.
+
+\subsection{Sphère de photons}
+
+L'équation~\eqref{eq:geodesique} admet une orbite circulaire instable à
+$r = \frac{3}{2}r_s$, la \textbf{sphère de photons}, correspondant au
+paramètre d'impact critique:
+
+\begin{equation}
+    b_{\text{crit}} = \frac{3\sqrt{3}}{2}\,r_s \approx 2{,}598\,r_s
+\end{equation}
+
+Les rayons avec $b < b_{\text{crit}}$ sont absorbés. Ceux avec
+$b \approx b_{\text{crit}}$ orbitent plusieurs fois, formant les
+\textbf{anneaux de photons} visibles dans le rendu.
+
+\section{Intégration numérique: méthode RK4}
+
+\subsection{Système différentiel}
+
+L'équation~\eqref{eq:geodesique} est du second ordre. On la convertit en
+système du premier ordre en posant $v = du/d\varphi$:
+
+\begin{equation}
+    \begin{cases}
+        \dfrac{du}{d\varphi} = v \\[8pt]
+        \dfrac{dv}{d\varphi} = -u + \dfrac{3}{2}\,r_s\,u^2
+    \end{cases}
+\end{equation}
+
+\subsection{Méthode de Runge-Kutta d'ordre 4}
+
+On intégre ce système avec un pas $\Delta\varphi = 0{,}03\,\text{rad}$.
+Pour l'état $(u_n, v_n)$ à l'étape $n$, on pose $f(u) = -u + \frac{3}{2}r_s u^2$:
+
+\begin{align}
+    k_1^u &= v_n
+    & k_1^v &= f(u_n) \\
+    k_2^u &= v_n + \tfrac{\Delta\varphi}{2}\,k_1^v
+    & k_2^v &= f\!\left(u_n + \tfrac{\Delta\varphi}{2}\,k_1^u\right) \\
+    k_3^u &= v_n + \tfrac{\Delta\varphi}{2}\,k_2^v
+    & k_3^v &= f\!\left(u_n + \tfrac{\Delta\varphi}{2}\,k_2^u\right) \\
+    k_4^u &= v_n + \Delta\varphi\,k_3^v
+    & k_4^v &= f\!\left(u_n + \Delta\varphi\,k_3^u\right)
+\end{align}
+
+La mise à jour de l'état:
+
+\begin{equation}
+    \begin{pmatrix} u_{n+1} \\ v_{n+1} \end{pmatrix}
+    = 
+    \begin{pmatrix} u_n \\ v_n \end{pmatrix}
+    + \frac{\Delta\varphi}{6}
+    \begin{pmatrix}
+        k_1^u + 2k_2^u + 2k_3^u + k_4^u \\
+        k_1^v + 2k_2^v + 2k_3^v + k_4^v
+    \end{pmatrix}
+\end{equation}
+
+\subsection{Conditions initiales}
+
+Pour un rayon d'origine $\vec{r}_0$ et de direction unitaire $\hat{d}$:
+
+\begin{align}
+    u_0 &= \frac{1}{|\vec{r}_0|} \\
+    \left.\frac{du}{d\varphi}\right|_0 &= -\frac{\hat{r}_0 \cdot \hat{d}}{b}
+\end{align}
+
+La position 3D à l'angle $\varphi$ est reconstruite dans la base orthonormée
+du plan orbital $(\vec{e}_r, \vec{e}_\varphi)$:
+
+\begin{equation}
+    \vec{r}(\varphi) = \frac{1}{u(\varphi)}
+    \left[\cos\varphi\;\vec{e}_r + \sin\varphi\;\vec{e}_\varphi\right]
+\end{equation}
+
+\subsection{Conditions de terminaison}
+
+\begin{itemize}
+    \item $r \leq r_s$: absorption par l'horizon $\rightarrow$ pixel noir.
+    \item $r \geq 30\,r_s$: évasion vers l'infini $\rightarrow$ couleur du fond.
+    \item Traversée du plan $y = 0$ dans $[r_{\text{inner}},\, r_{\text{outer}}]$
+          $\rightarrow$ couleur du disque d'accrétion.
+    \item $n > 500$ pas: rayon piégé près de la sphère de photons $\rightarrow$ pixel noir. 
+\end{itemize}
+
+\section{Modèle du disque d'accrétion}
+
+\subsection{Géométrie}
+
+Le disque est modélisé comme un anneau plan dans le plan équatorial $y = 0$,
+entre le rayon de l'orbite stable la plus interne (\textbf{ISCO}) et un rayon
+externe:
+
+\begin{align}
+    r_{\text{inner}} &= 3\,r_s \quad \text{(ISCO en Schwarzschild)} \\
+    r_{\text{outer}} &= 12\,r_s
+\end{align}
+
+La traversée est détectée par un changement de signe de la coordonnée $y$
+entre deux pas d'intégration consécutifs:
+
+\begin{equation}
+    y_{n-1} \cdot y_n < 0
+    \quad \text{et} \quad
+    r_{\text{inner}} < r_n < r_{\text{outer}}
+\end{equation}
+
+\subsection{Profil de température}
+
+La température décroît avec le rayon. On paramétrise par:
+
+\begin{equation}
+    t = 1 - \frac{r - r_{\text{inner}}}{r_{\text{outer}} - r_{\text{inner}}} \in [0, 1]
+\end{equation}
+
+Le gradient de couleur va du blanc-bleu chaud ($t = 1$, près de l'ISCO)
+à l'orange-rouge froid ($t = 0$, bord extérieur).
+
+\subsection{Effet Doppler relativiste}
+
+La matière du disque suit une orbite képlérienne de vitesse:
+
+\begin{equation}
+    v_{\text{orb}} = \sqrt{\frac{r_s}{2r}}
+\end{equation}
+
+La direction orbitale au point d'intersection $\vec{p}$ est:
+
+\begin{equation}
+    \hat{v}_{\text{orb}} = \frac{\vec{e}_y \times \hat{p}}{|\vec{e}_y \times \hat{p}|}
+\end{equation}
+
+Le \textbf{facteur Doppler} modifie la fréquence et l'intensité perçues:
+
+\begin{equation}
+    D = \frac{1}{1 - v_{\text{orb}}\cos\theta}
+    \qquad \text{où} \qquad
+    \cos\theta = \hat{v}_{\text{orb}} \cdot \hat{k}
+\end{equation}
+
+$\hat{k}$ étant la direction du photon au point d'intersection.
+L'intensité spécifique observée scale en $D^3$ (\textbf{beaming relativiste}).
+
+\subsection{Redshift gravitationnel}
+
+Un photon émis à rayon $r$ et observé à l'infini subit un décalage vers le rouge:
+
+\begin{equation}
+    g = \sqrt{1 - \frac{r_s}{r}}
+\end{equation}
+
+L'intensité finale combinée est:
+
+\begin{equation}
+    \boxed{I_{\text{obs}} = D^3 \cdot g \cdot I_{\text{base}}(r)}
+\end{equation}
+
+\section{Architecture GPU}
+
+\subsection{Pipeline de rendu}
+
+Chaque frame est produite en deux phases successives:
+
+\begin{enumerate}
+    \item \textbf{Compute pass} \--- un thread GPU par pixel intègre une géodésique
+    complète et écrit la couleur résultante dans une \emph{storage texture}.
+    \item \textbf{Render pass} \--- un triangle plein écran lit la texture via un
+    sampler et l'affiche sur la surface.
+\end{enumerate}
+
+\subsection{Caméra orbitale}
+
+La caméra est paramétrisée en coordonnées sphériques $(\theta, \varphi, r)$:
+
+\begin{equation}
+    \vec{r}_{\text{cam}} = r
+    \begin{pmatrix}
+        \sin\theta\cos\varphi \\
+        \cos\theta \\
+        \sin\theta\sin\varphi
+    \end{pmatrix}
+\end{equation}
+
+Sa position et sa base $(\hat{\text{right}}, \hat{\text{up}}, \hat{\text{forward}})$
+sont transmises au compute shader via un \emph{uniform buffer} mis à jour chaque frame.
+La direction de chaque rayon est construite depuis les coordonnées UV normalisées du pixel:
+
+\begin{equation}
+    \hat{d} = \text{normalize}\!\left(
+        u \cdot \hat{\text{right}} +
+        v \cdot \hat{\text{up}} +
+        \frac{\hat{\text{forward}}}{\tan(\alpha/2)}
+    \right)
+\end{equation}
+
+Où $\alpha$ est l'angle d'ouverture (FOV) de la caméra.
+
+\subsection{Complexité}
+
+Pour une résolution $W \times H$, on lance
+$\lceil W/8 \rceil \times \lceil H/8 \rceil$ workgroups de $8 \times 8$ threads.
+Chaque thread exécute au plus 500 itérations RK4, soit au pire
+$W \cdot H \cdot 500$ évaluations de $f(u)$ par frame, entièrement parallélisées sur le GPU.
+
+\newpage
+
+\begin{thebibliography}{9}
+
+\bibitem{mtw}
+Misner, C.W., Thorne, K.S., Wheeler, J.A. (1973).
+\textit{Gravitation}. W.H. Freeman.
+
+\bibitem{wald}
+Wald, R.M. (1984).
+\textit{General relativity}. University of Chicago Press.
+
+\bibitem{luminet}
+Luminet, J.P. (1979).
+Image of a spherical black hole with thin accretion disk.
+\textit{Astronomy \& Astrophysics}, 75, 228--235.
+
+\bibitem{james}
+James, O. et al. (2015).
+Gravitational lensing by spinning black holes in astrophysics,
+and in the movie Interstellar.
+\textit{Classical and Quantum Gravity}, 32(6).
+
+\bibitem{wgpu}
+wgpu \--- Safe and portable GPU abstraction in Rust.
+\url{https://wgpu.rs} 
+
+\end{thebibliography}
+
+\end{document}

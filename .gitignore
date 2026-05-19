@@ -1,2 +1,20 @@
+# Ignore all IDE directory and artefacts
 /target
 .idea
+
+# Ignore LaTex artefacts
+*.aux
+*.log
+*.out
+*.toc
+*.blg
+*.bbl
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+
+# Keep PDFs
+!*.pdf
