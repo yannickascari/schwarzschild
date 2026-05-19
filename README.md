@@ -18,6 +18,8 @@ Each pixel corresponds to one photon trajectory, governed by the Schwarzschild g
 
 $$\frac{d^2u}{d\varphi^2} + u = \frac{3}{2}\, r_s\, u^2$$
 
+Full derivation and algorithmic documentation: [schwarzschild_physics.pdf](docs/schwarzschild_physics.pdf)
+
 ## Stack
 
 |           |                                          |
