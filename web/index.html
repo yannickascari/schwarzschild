@@ -6,5 +6,15 @@
     <title>Schwarzschild</title>
 </head>
 <body>
+    <div id="no-webgpu" style="display: none">
+        <h2>WebGPU requis</h2>
+        <p>Ce navigateur ne supporte pas WebGPU.</p>
+        <p>Utilise <a href="https://www.google.com/chrome/">Chrome 113+</a> ou Safari 17+.</p>
+        <p class="hint">Sur Linux, lance Chrome avec :<br>
+            <code>google-chrome --enable-unsafe-webgpu --ignore-gpu-blocklist</code>
+        </p>
+        <p>Vérifie la compatibilité de ton navigateur : <a href="https://webgpureport.org/" target="_blank">webgpureport.org</a></p>
+    </div>
     <script type="module" src="/src/main.ts"></script>
 </body>
+</html>

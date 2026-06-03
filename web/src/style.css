@@ -14,3 +14,22 @@ canvas {
     width: 100vw;
     height: 100vh;
 }
+
+#no-webgpu {
+    position: fixed;
+    inset: 0;
+    background: #0a0a0f;
+    color: #e0d8ff;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-family: sans-serif;
+    text-align: center;
+    padding: 2rem;
+}
+
+#no-webgpu h2 { color: #ff9060; font-size: 1.8rem; }
+#no-webgpu a { color: #80aaff; }
+#no-webgpu .hint { background: #1a1a2e; padding: 1rem; border-radius: 8px; font-size: 0.85rem; }
+#no-webgpu code { color: #90ff90; }

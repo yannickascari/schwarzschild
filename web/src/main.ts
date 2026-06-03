@@ -1,7 +1,18 @@
 import './style.css';
-import init from '../pkg/schwarzschild.js';
 
 async function main(): Promise<void> {
+    if (!navigator.gpu) {
+        document.getElementById('no-webgpu')!.style.display = 'flex';
+        return;
+    }
+
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+        document.getElementById('no-webgpu')!.style.display = 'flex';
+        return;
+    }
+
+    const { default: init } = await import('../pkg/schwarzschild.js');
     await init();
 }
 
