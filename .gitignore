@@ -18,3 +18,7 @@
 
 # Keep PDFs
 !*.pdf
+
+/web/pkg/
+/.vite/
+*.rpm

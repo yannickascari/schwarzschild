@@ -33,9 +33,33 @@ Full derivation and algorithmic documentation: [schwarzschild_physics.pdf](docs/
 
 ## Build & Run
 
+### Desktop
+
 ```bash
 cargo run --release
 ```
+
+### Web (WASM)
+
+**Requirements:** wasm-pack, Node.js
+
+```bash
+wasm-pack build --target web --out-dir web/pkg
+cd web && npx vite
+```
+
+Then open `http://localhost:5173` in Chrome with WebGPU enabled.
+
+**Chrome on Linux** requires these flags for hardware GPU acceleration:
+
+```bash
+google-chrome --enable-unsafe-webgpu --ignore-gpu-blocklist \
+  --use-angle=vulkan \
+  --enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan \
+  --ozone-platform=x11
+```
+
+On Windows and macOS, WebGPU works out of the box in Chrome 113+.
 
 ## Controls
 

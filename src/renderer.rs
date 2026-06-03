@@ -27,7 +27,11 @@ impl GPUState {
         let size = window.inner_size();
 
         let instance = Instance::new(InstanceDescriptor {
-            backends: Backends::all(),
+            backends: if cfg!(target_arch = "wasm32") {
+                Backends::BROWSER_WEBGPU
+            } else {
+                Backends::all()
+            },
             display: None,
             flags: Default::default(),
             backend_options: Default::default(),
@@ -38,7 +42,11 @@ impl GPUState {
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::HighPerformance,
+                power_preference: if cfg!(target_arch = "wasm32") {
+                    PowerPreference::None
+                } else {
+                    PowerPreference::HighPerformance
+                },
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -49,7 +57,11 @@ impl GPUState {
             .request_device(&DeviceDescriptor {
                 label: Some("Main Device"),
                 required_features: Features::empty(),
-                required_limits: Limits::default(),
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    Limits::downlevel_webgl2_defaults()
+                } else {
+                    Limits::default()
+                },
                 experimental_features: Default::default(),
                 memory_hints: Default::default(),
                 trace: Default::default(),
