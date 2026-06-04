@@ -13,29 +13,50 @@ struct CameraUniform {
 
 @group(0) @binding(1) var<uniform> camera: CameraUniform;
 
-const RS: f32        = 1.0;
-const R_MAX: f32     = 30.0;
-const DPHI: f32      = 0.03;
-const MAX_STEPS: u32 = 500u;
-const R_INNER: f32   = 3.0;
-const R_OUTER: f32 = 12.0;
+const RS: f32         = 1.0;
+const PI: f32         = 3.14159265;
+const CELL_RATIO: f32 = 0.9;
+const R_MAX: f32      = 30.0;
+const DPHI: f32       = 0.03;
+const MAX_STEPS: u32  = 500u;
+const R_INNER: f32    = 3.0;
+const R_OUTER: f32    = 12.0;
+
+fn hash2d(p: vec2<f32>) -> f32 {
+    return fract(sin(dot(p, vec2<f32>(127.1, 311.7))) * 43758.5453);
+}
 
 fn sky_color(dir: vec3<f32>) -> vec3<f32> {
-    let phi = atan2(dir.z, dir.x);
-    let theta = acos(clamp(dir.y, -1.0, 1.0));
+    let u = atan2(dir.z, dir.x) / (2.0 * PI) + 0.5;
+    let v = acos(clamp(dir.y, -1.0, 1.0)) / PI;
+    let uv = vec2<f32>(u, v);
 
-    let grid = f32(
-        abs(sin(phi * 9.0)) < 0.15 ||
-        abs(sin(theta * 9.0)) < 0.15
+    let N = 300.0;
+    let cell = floor(uv * N);
+    let cell_uv = fract(uv * N);
+
+    let star_x = hash2d(cell);
+    let star_y = hash2d(cell + vec2<f32>(13.7, 27.3));
+    let star_b = hash2d(cell + vec2<f32>(57.1, 113.5));
+
+    var star = 0.0;
+    if star_b > CELL_RATIO {
+        let d = length(cell_uv - vec2<f32>(star_x, star_y));
+        let size = 0.04 + (star_b - CELL_RATIO) * 1.5;
+        star = smoothstep(size, 0.0, d) * (star_b - CELL_RATIO) * 25.0;
+    }
+
+    let star_color = mix(
+        vec3<f32>(0.8, 0.9, 1.0),
+        vec3<f32>(1.0, 0.9, 0.7),
+        hash2d(cell + vec2<f32>(3.3, 7.7))
     );
 
-    let sky = mix(
-        vec3<f32>(0.8, 0.3, 0.05),
-        vec3<f32>(0.05, 0.1, 0.5),
-        clamp(dir.y * 0.5 + 0.5, 0.0, 1.0)
-    );
+    let milky = exp(-abs(dir.y) * 5.0) * 0.08;
 
-    return mix(sky, vec3<f32>(1.0), grid * 0.9);
+    return vec3<f32>(0.0, 0.0, 0.015)
+        + vec3<f32>(0.3, 0.35, 0.5) * milky
+        + star_color * star;
 }
 
 fn disk_color(pos3d: vec3<f32>, photon_dir: vec3<f32>, r: f32) -> vec4<f32> {

@@ -11,8 +11,6 @@ use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
-use winit::dpi::LogicalSize;
-use winit::window::Fullscreen;
 
 struct App {
     window: Option<Arc<Window>>,
