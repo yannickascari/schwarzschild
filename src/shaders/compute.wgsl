@@ -17,7 +17,7 @@ const RS: f32         = 1.0;
 const PI: f32         = 3.14159265;
 const CELL_RATIO: f32 = 0.9;
 const R_MAX: f32      = 30.0;
-const DPHI: f32       = 0.03;
+const DPHI: f32       = 0.01;
 const MAX_STEPS: u32  = 500u;
 const R_INNER: f32    = 3.0;
 const R_OUTER: f32    = 12.0;
@@ -81,9 +81,13 @@ fn disk_color(pos3d: vec3<f32>, photon_dir: vec3<f32>, r: f32) -> vec4<f32> {
 
     let grav = sqrt(max(1.0 - RS / r, 0.0));
 
-    let intensity = pow(doppler, 3.0) * grav;
+    let intensity = pow(doppler, 1.5) * grav;
 
-    return vec4<f32>(base * intensity, 1.0);
+    let outer_fade = smoothstep(R_OUTER, R_OUTER - 2.0, r);
+    let inner_fade = smoothstep(R_INNER, R_INNER + 1.5, r);
+    let alpha = outer_fade * inner_fade;
+
+    return vec4<f32>(base * intensity * alpha, 1.0);
 }
 
 fn trace_ray(ro: vec3<f32>, rd: vec3<f32>) -> vec4<f32> {
@@ -101,33 +105,41 @@ fn trace_ray(ro: vec3<f32>, rd: vec3<f32>) -> vec4<f32> {
     var du = -dot(e_r, rd) / b;
     var phi = 0.0;
 
-    var prev_y = ro.y;
+    var disk_rgb = vec3<f32>(0.0);
+    var disk_opacity = 0.0;
 
     for (var i = 0u; i < MAX_STEPS; i++) {
         let r = 1.0 / max(u, 0.0001);
 
-        if r <= RS { return vec4<f32>(0.0, 0.0, 0.0, 1.0); }
+        if r <= RS { return vec4<f32>(disk_rgb, 1.0); }
 
         if r >= R_MAX {
             let exit_dir = normalize(
                 (-du / (u * u)) * (cos(phi) * e_r + sin(phi) * e_phi) +
                 (1.0 / u) * (-sin(phi) * e_r + cos(phi) * e_phi)
             );
-            return vec4<f32>(sky_color(exit_dir), 1.0);
+            let sky = sky_color(exit_dir);
+            return vec4<f32>(disk_rgb + sky * (1.0 - disk_opacity), 1.0);
         }
 
         let pos3d = (1.0 / u) * (cos(phi) * e_r + sin(phi) * e_phi);
-        let curr_y = pos3d.y;
 
-        if prev_y * curr_y < 0.0 && r > R_INNER && r < R_OUTER {
-            let photon_dir = normalize(
-                (-du / (u * u)) * (cos(phi) * e_r + sin(phi) * e_phi) +
-                (1.0 / u) * (-sin(phi) * e_r + cos(phi) * e_phi)
-            );
-            return disk_color(pos3d, photon_dir, r);
+        if r > R_INNER && r < R_OUTER && disk_opacity < 0.99 {
+            let H = r * 0.03;
+            let weight = exp(-pos3d.y * pos3d.y / (2.0 * H * H)) * DPHI * 10.0;
+
+            if weight > 0.001 {
+                let photon_dir = normalize(
+                    (-du / (u * u)) * (cos(phi) * e_r + sin(phi) * e_phi) +
+                    (1.0 / u) * (-sin(phi) * e_r + cos(phi) * e_phi)
+                );
+
+                let dc = disk_color(pos3d, photon_dir, r);
+                let contrib = weight * dc.a;
+                disk_rgb += dc.xyz * contrib * (1.0 - disk_opacity);
+                disk_opacity = min(disk_opacity + contrib * (1.0 - disk_opacity), 1.0);
+            }
         }
-
-        prev_y = curr_y;
 
         let k1u = du;
         let k1v = -u + 1.5 * RS * u * u;
@@ -149,7 +161,7 @@ fn trace_ray(ro: vec3<f32>, rd: vec3<f32>) -> vec4<f32> {
         phi += DPHI;
     }
 
-    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    return vec4<f32>(disk_rgb, 1.0);
 }
 
 @compute @workgroup_size(8, 8, 1)
