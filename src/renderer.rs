@@ -24,7 +24,19 @@ pub struct GPUState {
 
 impl GPUState {
     pub async fn new(window: Arc<Window>) -> Self {
-        let size = window.inner_size();
+        #[cfg(not(target_arch = "wasm32"))]
+        let size = {
+            let s = window.inner_size();
+            winit::dpi::PhysicalSize::new(s.width.max(1), s.height.max(1))
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let size = {
+            let win = web_sys::window().unwrap();
+            let w = win.inner_width().unwrap().as_f64().unwrap() as u32;
+            let h = win.inner_height().unwrap().as_f64().unwrap() as u32;
+            winit::dpi::PhysicalSize::new(w.max(1), h.max(1))
+        };
 
         let instance = Instance::new(InstanceDescriptor {
             backends: if cfg!(target_arch = "wasm32") {

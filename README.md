@@ -4,11 +4,17 @@ Real-time ray-casting simulation of a Schwarzschild black hole, built with Rust 
 
 ![demo](docs/demo.gif)
 
+## Live Demo
+
+[yannickascari.github.io/schwarzschild](https://yannickascari.github.io/schwarzschild/) — requires a WebGPU-capable browser (Chrome 113+)
+
 ## Features
 
 - Relativistic null geodesics integrated with RK4 on the GPU
-- Photon Sphere and gravitational lensing
-- Accretion disk with Doppler beaming and gravitational redshift
+- Photon sphere and gravitational lensing
+- Volumetric accretion disk with Gaussian height profile, Doppler beaming, and gravitational redshift
+- Smooth disk edges via `smoothstep` — no plane-crossing aliasing
+- Procedural starfield background with color variation and Milky Way glow
 - Interactive orbital camera (mouse drag + scroll)
 - ~2M geodesics computed per frame in parallel
 
@@ -48,7 +54,7 @@ wasm-pack build --target web --out-dir web/pkg
 cd web && npx vite
 ```
 
-Then open `http://localhost:5173` in Chrome with WebGPU enabled.
+Then open `http://localhost:5173/schwarzschild/` in Chrome with WebGPU enabled.
 
 **Chrome on Linux** requires these flags for hardware GPU acceleration:
 

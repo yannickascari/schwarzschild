@@ -23,9 +23,9 @@ pub struct OrbitalCamera {
 impl OrbitalCamera {
     pub fn new() -> Self {
         Self {
-            theta:  std::f32::consts::FRAC_PI_2,
+            theta:  std::f32::consts::FRAC_PI_2 + 0.2,
             phi:    0.0,
-            radius: 15.0,
+            radius: 20.0,
             fov:    0.5,
         }
     }

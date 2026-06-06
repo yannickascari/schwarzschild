@@ -16,7 +16,7 @@ struct CameraUniform {
 const RS: f32         = 1.0;
 const PI: f32         = 3.14159265;
 const CELL_RATIO: f32 = 0.9;
-const R_MAX: f32      = 30.0;
+const R_MAX: f32      = 60.0;
 const DPHI: f32       = 0.01;
 const MAX_STEPS: u32  = 500u;
 const R_INNER: f32    = 3.0;

@@ -133,7 +133,7 @@ système du premier ordre en posant $v = du/d\varphi$:
 
 \subsection{Méthode de Runge-Kutta d'ordre 4}
 
-On intégre ce système avec un pas $\Delta\varphi = 0{,}03\,\text{rad}$.
+On intégre ce système avec un pas $\Delta\varphi = 0{,}01\,\text{rad}$.
 Pour l'état $(u_n, v_n)$ à l'étape $n$, on pose $f(u) = -u + \frac{3}{2}r_s u^2$:
 
 \begin{align}
@@ -181,9 +181,7 @@ du plan orbital $(\vec{e}_r, \vec{e}_\varphi)$:
 
 \begin{itemize}
     \item $r \leq r_s$: absorption par l'horizon $\rightarrow$ pixel noir.
-    \item $r \geq 30\,r_s$: évasion vers l'infini $\rightarrow$ couleur du fond.
-    \item Traversée du plan $y = 0$ dans $[r_{\text{inner}},\, r_{\text{outer}}]$
-          $\rightarrow$ couleur du disque d'accrétion.
+    \item $r \geq 60\,r_s$: évasion vers l'infini $\rightarrow$ couleur du fond.
     \item $n > 500$ pas: rayon piégé près de la sphère de photons $\rightarrow$ pixel noir. 
 \end{itemize}
 
@@ -191,23 +189,19 @@ du plan orbital $(\vec{e}_r, \vec{e}_\varphi)$:
 
 \subsection{Géométrie}
 
-Le disque est modélisé comme un anneau plan dans le plan équatorial $y = 0$,
-entre le rayon de l'orbite stable la plus interne (\textbf{ISCO}) et un rayon
-externe:
-
-\begin{align}
-    r_{\text{inner}} &= 3\,r_s \quad \text{(ISCO en Schwarzschild)} \\
-    r_{\text{outer}} &= 12\,r_s
-\end{align}
-
-La traversée est détectée par un changement de signe de la coordonnée $y$
-entre deux pas d'intégration consécutifs:
+L'ancienne méthode (changement de signe y, équation $y_{n-1} \cdot y_n < 0$) est abandonnée au profit
+d'un disque volumétrique: à chaque pas RK4, le rayon accumule une contribution du disque pondérée par
+une gaussienne verticale:
 
 \begin{equation}
-    y_{n-1} \cdot y_n < 0
-    \quad \text{et} \quad
-    r_{\text{inner}} < r_n < r_{\text{outer}}
+    H(r) = 0{,}03 \cdot r \qquad \text{(hauteur d'échelle)}
 \end{equation}
+
+\begin{equation}
+    w = \exp!\left(-\frac{y^2}{2H^2}\right) \cdot \Delta\varphi \cdot 10
+\end{equation}
+
+Cela modélise un disque d'épaisseur finie physiquement justifiée (disque mince $H/r \ll 1$), au lieu d'une intersection binaire avec un plan infiniment fin.
 
 \subsection{Profil de température}
 
@@ -219,6 +213,14 @@ La température décroît avec le rayon. On paramétrise par:
 
 Le gradient de couleur va du blanc-bleu chaud ($t = 1$, près de l'ISCO)
 à l'orange-rouge froid ($t = 0$, bord extérieur).
+
+\
+
+Les bords du disque sont fondus via des fonctions \textit{smoothstep} pour éviter les discontinuités:
+
+\begin{equation}
+    \alpha = \text{smoothstep}(r_{\text{outer}}, r_{\text{outer}}-2, r) \cdot \text{smoothstep}(r_{\text{inner}}, r_{\text{inner}}+1{,}5, r)
+\end{equation}
 
 \subsection{Effet Doppler relativiste}
 
@@ -243,7 +245,7 @@ Le \textbf{facteur Doppler} modifie la fréquence et l'intensité perçues:
 \end{equation}
 
 $\hat{k}$ étant la direction du photon au point d'intersection.
-L'intensité spécifique observée scale en $D^3$ (\textbf{beaming relativiste}).
+L'intensité spécifique observée scale en $D^{1,5}$ (\textbf{beaming relativiste}).
 
 \subsection{Redshift gravitationnel}
 
@@ -256,7 +258,17 @@ Un photon émis à rayon $r$ et observé à l'infini subit un décalage vers le 
 L'intensité finale combinée est:
 
 \begin{equation}
-    \boxed{I_{\text{obs}} = D^3 \cdot g \cdot I_{\text{base}}(r)}
+    \boxed{I_{\text{obs}} = D^{1{,}5} \cdot g \cdot I_{\text{base}}(r)}
+\end{equation}
+
+L'intensité n'est plus calculée à un seul point d'intersection mais par \textbf{alpha-compositing} le long du rayon:
+
+\begin{equation}
+    \text{rgb} \mathrel{+}= I_{\text{obs}} \cdot w \cdot (1 - \text{opacité})
+\end{equation}
+
+\begin{equation}
+    \text{opacité} \mathrel{+}= w \cdot (1 - \text{opacité})
 \end{equation}
 
 \section{Architecture GPU}
@@ -331,7 +343,7 @@ and in the movie Interstellar.
 
 \bibitem{wgpu}
 wgpu \--- Safe and portable GPU abstraction in Rust.
-\url{https://wgpu.rs} 
+\url{https://wgpu.rs}
 
 \end{thebibliography}
 

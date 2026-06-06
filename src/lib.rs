@@ -26,7 +26,12 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
             event_loop.create_window(
-                Window::default_attributes().with_title("Schwarzschild")
+                {
+                    let attrs = Window::default_attributes().with_title("Schwarzschild");
+                    #[cfg(not(target_arch = "wasm32"))]
+                    let attrs = attrs.with_maximized(true);
+                    attrs
+                }
             ).unwrap()
         );
 
@@ -49,9 +54,11 @@ impl ApplicationHandler for App {
         #[cfg(target_arch = "wasm32")]
         {
             let pending = self.gpu_pending.clone();
+            let window_ref = window.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 let gpu = GPUState::new(window).await;
                 *pending.borrow_mut() = Some(gpu);
+                window_ref.request_redraw();
             });
         }
     }
